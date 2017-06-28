@@ -1,0 +1,26 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+        "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+    <title>车辆信息</title>
+    <meta charset="UTF-8"/>
+</head>
+<body>
+    <table border="1">
+        <tr>
+            <td>车源号</td>
+            <td>关键词</td>
+            <td>描述</td>
+            <td>链接</td>
+        </tr>
+        {% for car in carlist %}
+            <tr>
+                <td>{{ car.carid}}</td>
+                <td>{{ car.keywords}}</td>
+                <td>{{ car.description}}</td>
+                <td><a href="{{ car.url}}" target="_blank">{{ car.url}}</a></td>
+            </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
