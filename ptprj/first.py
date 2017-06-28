@@ -5,11 +5,13 @@ from bs4 import BeautifulSoup
 from collections import deque
 import threading
 import pymysql
+import os
 
 url_queue = deque()
 visited_urls = set()
 crawled_cars = set()
 lock = threading.Lock()
+base_imgs_path = "/home/lvxq/Downloads/cars"
 
 
 def crawl_page(url):
@@ -30,6 +32,25 @@ def parse_page_car_information(html, url):
     car_keyword = soup.find('meta', {'name' : 'keywords'}).get('content')
     car_description = soup.find('meta', {'name' : 'description'}).get('content')
     return [car_id, car_keyword, car_description, url]
+
+def download_car_pictures(html, car_id, car_db_id):
+    soup = BeautifulSoup(html, "html.parser")
+    img_list = soup.find_all('img', {"class" : "main-pic"})
+    for img in img_list:
+        img_url = "https:" + img.get("src")
+        idx = img_url.find('?')
+        if idx >= 0:
+            img_url = img_url[0: idx]
+        dst_dir = base_imgs_path + "/" + car_id
+        if not os.path.exists(dst_dir):
+            os.makedirs(dst_dir)
+        idx = img_url.find('/')
+        img_name = img_url
+        if idx >= 0:
+            img_name = img_url[idx:]
+        img_path = dst_dir + '/' + img_name
+        urllib.request.urlretrieve(img_url, img_path)
+    pass
 
 def save_car_info_to_db(car_information):
     conn = pymysql.connect(host='127.0.0.1', port=3306, user='root', passwd='1234', db='mycars', use_unicode=True,
@@ -73,6 +94,7 @@ def crawl_sub_page(url):
             url_queue.append(new_url)
             print("New URL: " + new_url)
     lock.release()
+    download_car_pictures(html, car_infos[0], 0)
 
 
 
