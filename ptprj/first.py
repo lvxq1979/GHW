@@ -12,6 +12,7 @@ visited_urls = set()
 crawled_cars = set()
 lock = threading.Lock()
 base_imgs_path = "/home/lvxq/Downloads/cars"
+car_img_seperator = '||'
 
 
 def crawl_page(url):
@@ -36,21 +37,47 @@ def parse_page_car_information(html, url):
 def download_car_pictures(html, car_id, car_db_id):
     soup = BeautifulSoup(html, "html.parser")
     img_list = soup.find_all('img', {"class" : "main-pic"})
+    img_str = ''
     for img in img_list:
-        img_url = "https:" + img.get("src")
+        img_url = "https:" + img.get("data-src")
         idx = img_url.find('?')
         if idx >= 0:
             img_url = img_url[0: idx]
         dst_dir = base_imgs_path + "/" + car_id
         if not os.path.exists(dst_dir):
             os.makedirs(dst_dir)
-        idx = img_url.find('/')
-        img_name = img_url
+        idx = img_url.find('o_')
         if idx >= 0:
             img_name = img_url[idx:]
-        img_path = dst_dir + '/' + img_name
-        urllib.request.urlretrieve(img_url, img_path)
-    pass
+            img_path = dst_dir + '/' + img_name
+            print(img_path)
+            try:
+                urllib.request.urlretrieve(img_url, img_path)
+                img_str += img_name
+                img_str += car_img_seperator
+            except:
+                continue
+    save_car_imgs_to_db(car_db_id, img_str)
+
+def save_car_imgs_to_db(car_db_id, img_path):
+    conn = pymysql.connect(host='127.0.0.1', port=3306, user='root', passwd='1234', db='mycars', use_unicode=True,
+                           charset='utf8')
+    cur = conn.cursor()
+    try:
+        cur.execute('SELECT id FROM carpictures WHERE carid=%s', (car_db_id))
+        cur.fetchall()
+        if (cur.rowcount > 0):
+            cur.execute('UPDATE carpictures set carpicspath=%s WHERE carid=%s', (img_path, car_db_id))
+        else:
+            cur.execute('INSERT INTO carpictures(carid, carpicspath) VALUES(%s, %s)',
+                                 (car_db_id, img_path))
+        conn.commit()
+    except Exception:
+        return
+    finally:
+        cur.close()
+        conn.close()
+
 
 def save_car_info_to_db(car_information):
     conn = pymysql.connect(host='127.0.0.1', port=3306, user='root', passwd='1234', db='mycars', use_unicode=True,
@@ -58,15 +85,17 @@ def save_car_info_to_db(car_information):
     cur = conn.cursor()
     try:
         cur.execute('SELECT id FROM carlist WHERE carid=%s', (car_information[0]))
-        cur.fetchall()
+        ids = cur.fetchall()
         if (cur.rowcount > 0):
-            return
+            return ids[0][0]
         else:
             cur.execute('INSERT INTO carlist(carid, keywords, description, url) VALUES(%s, %s, %s, %s)',
                                  (car_information[0], car_information[1], car_information[2], car_information[3]))
+            new_id = cur.lastrowid
             conn.commit()
+            return new_id
     except Exception:
-        return
+        return -1
     finally:
         cur.close()
         conn.close()
@@ -86,7 +115,8 @@ def crawl_sub_page(url):
     new_cars_list = parse_page_sub_links(html)
     car_infos = parse_page_car_information(html, url)
     lock.acquire()
-    save_car_info_to_db(car_infos)
+    car_db_id = save_car_info_to_db(car_infos)
+    print("car id = " + str(car_db_id))
     global url_queue
     for new_car in new_cars_list:
         new_car_url = "https://www.renrenche.com/" + new_car.get("href")
@@ -94,7 +124,8 @@ def crawl_sub_page(url):
             url_queue.append(new_url)
             print("New URL: " + new_url)
     lock.release()
-    download_car_pictures(html, car_infos[0], 0)
+    if car_db_id >= 0:
+        download_car_pictures(html, car_infos[0], car_db_id)
 
 
 
